@@ -23,7 +23,7 @@ func nonce() string {
 	nonce := make([]byte, 16)
 	_, err := io.ReadFull(rand.Reader, nonce)
 	if err != nil {
-		panic("unable to read from crypto/rand.Reader; process is insecure: " + err.Error())
+		panic(err)
 	}
 	return hex.EncodeToString(nonce)
 }

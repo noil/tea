@@ -3,51 +3,119 @@ package tea
 import (
 	"bytes"
 	"compress/gzip"
-	"fmt"
-	"io/ioutil"
+	"encoding/json"
+	"errors"
 	"net/http"
 )
 
-func (tea *TwitterEngagementAPI) Total(tweetIds []string, types []EngagementType, groupBy []GroupBy) {
-	params, err := tea.Params(tweetIds, types, groupBy)
-	if err != nil {
-		fmt.Println(err)
+var (
+	ErrExceedsMaxTweets    = errors.New("number of tweets exceeds 250")
+	ErrExceedsMaxGroupings = errors.New("number of groupings exceeds 3")
+	ErrHTTPBadCode         = errors.New("HTTP bad code")
+)
+
+type EngagementType string
+
+const (
+	TotalImpressionType EngagementType = "impressions" //`90days:true`
+	TotalEngagementType EngagementType = "engagements" //`90days:true`
+	TotalFavoriteType   EngagementType = "favorites"   //`90days:false`
+	TotalRetweetType    EngagementType = "retweets"    //`90days:false`
+	TotalReplieType     EngagementType = "replies"     //`90days:false`
+	TotalVideoViewType  EngagementType = "video_views" //`90days:false`
+)
+
+type Grouping map[string]*GroupBy
+
+type GroupBy struct {
+	Groups []Group `json:"group_by"`
+}
+
+type Group string
+
+const (
+	TotalTweetIdGroup        Group = "tweet.id"
+	TotalEngagementTypeGroup Group = "engagement.type"
+)
+
+type Total struct {
+	tea             *TwitterEngagementAPI
+	TweetIds        []string         `json:"tweet_ids"`
+	EngagementTypes []EngagementType `json:"engagement_types"`
+	Groupings       Grouping         `json:"groupings"`
+	valid           bool
+	err             error
+}
+
+func (tea *TwitterEngagementAPI) Total(tweetIds []string) *Total {
+	total := &Total{tea: tea, valid: true}
+	if 250 < len(tweetIds) {
+		total.valid = false
+		total.err = ErrExceedsMaxTweets
+	} else {
+		total.TweetIds = tweetIds
 	}
-	client := tea.httpClient()
+	return total
+}
+
+func (total *Total) EngagementType(types []EngagementType) *Total {
+	total.EngagementTypes = types
+	return total
+}
+
+func (total *Total) Grouping(grouping Grouping) *Total {
+	if 3 < len(grouping) {
+		total.valid = false
+		total.err = ErrExceedsMaxGroupings
+	}
+	total.Groupings = grouping
+	return total
+}
+
+func (total *Total) Valid() bool {
+	return total.valid
+}
+
+func (total *Total) Error() error {
+	return total.err
+}
+
+func (total *Total) Result() (map[string]interface{}, error) {
+	params, err := json.Marshal(total)
+	if nil != err {
+		return nil, err
+	}
 	request, err := http.NewRequest("POST", totalUrl, bytes.NewBuffer(params))
 	request.Header.Add("Accept-Encoding", "gzip")
-	request.Header.Add("Authorization", tea.OAuthHeader(totalUrl))
+	request.Header.Add("Authorization", total.tea.OAuthHeader(totalUrl))
 	request.Header.Add("Content-Type", "application/json")
-	response, err := client.Do(request)
+	response, err := total.tea.httpClient.Do(request)
 	defer func() {
 		if nil != response {
 			response.Body.Close()
 		}
 	}()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	if http.StatusBadRequest == response.StatusCode {
-		panic("bad http code")
-	}
+
 	reader, err := gzip.NewReader(response.Body)
 	if nil != err {
-		panic(err)
+		return nil, err
 	}
-	data, err := ioutil.ReadAll(reader)
+	if http.StatusOK != response.StatusCode {
+		errors := &APIError{}
+		err = json.NewDecoder(reader).Decode(errors)
+		if nil != err {
+			return nil, err
+		}
+		return nil, errors
+	}
+	success := Success{}
+	err = json.NewDecoder(reader).Decode(&success)
 	if nil != err {
-		panic(err)
+		return nil, err
 	}
-	fmt.Printf("%s", data)
-	// err = json.NewDecoder(response.Body).Decode(token)
-	// if nil != err {
-	// 	return token, err
-	// }
 
-	// fmt.Printf("%s\r\n", params)
-	// fmt.Printf("%s\r\n", sign)
-}
-
-func (tea *TwitterEngagementAPI) Params(tweetIds []string, types []EngagementType, groupBy []GroupBy) ([]byte, error) {
-	return requestParams(tweetIds, types, groupBy)
+	return success, nil
 }

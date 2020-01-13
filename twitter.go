@@ -1,27 +1,10 @@
 package tea
 
-type EngagementType string
-
-const (
-	TypeImpressions EngagementType = "impressions"
-	TypeEngagements EngagementType = "engagements"
-	TypeFavorites   EngagementType = "favorites"
-	TypeRetweets    EngagementType = "retweets"
-	TypeReplies     EngagementType = "replies"
-	TypeVideoViews  EngagementType = "video_views"
-)
-
-type GroupBy string
-
-const (
-	GroupByTweetId GroupBy = "tweet.id"
-	GroupByEngType GroupBy = "engagement.type"
-	// EngDay  GroupBy = "engagement.day"
-	// EngHour GroupBy = "engagement.hour"
-)
+import "net/http"
 
 type TwitterEngagementAPI struct {
-	Token Token
+	Token      Token
+	httpClient *http.Client
 }
 
 var totalUrl = "https://data-api.twitter.com/insights/engagement/totals"
@@ -36,5 +19,13 @@ type Token struct {
 }
 
 func New(token Token) *TwitterEngagementAPI {
-	return &TwitterEngagementAPI{Token: token}
+	return &TwitterEngagementAPI{Token: token, httpClient: defaultHttpClient()}
+}
+
+func (tea *TwitterEngagementAPI) Client(httpClient *http.Client) *TwitterEngagementAPI {
+	if nil != httpClient {
+		tea.httpClient = httpClient
+	}
+
+	return tea
 }

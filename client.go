@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func (tea *TwitterEngagementAPI) httpClient() *http.Client {
+func defaultHttpClient() *http.Client {
 	return &http.Client{
 		Timeout: time.Second * 10,
 		Transport: &http.Transport{
