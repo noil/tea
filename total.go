@@ -47,7 +47,7 @@ const (
 	TotalEngagementTypeGroup By = "engagement.type"
 )
 
-var defaultGrouping = Grouping{
+var defaultGroupings = Grouping{
 	"default_grouping": &Group{
 		By: []By{
 			TotalTweetIdGroup,
@@ -89,7 +89,7 @@ func (total *Total) EngagementType(types []EngagementType) *Total {
 
 func (total *Total) Grouping(grouping Grouping) *Total {
 	if 0 == len(grouping) {
-		grouping = defaultGrouping
+		grouping = defaultGroupings
 	}
 	if 3 < len(grouping) {
 		total.valid = false
@@ -108,6 +108,13 @@ func (total *Total) Error() error {
 }
 
 func (total *Total) Result() (*TotalResult, error) {
+	if 0 == len(total.EngagementTypes) {
+		total.EngagementTypes = defaultEngagementTypes
+	}
+	if 0 == len(total.Groupings) {
+		total.Groupings = defaultGroupings
+	}
+
 	result := newTotalResult()
 	params, err := json.Marshal(total)
 	if nil != err {
