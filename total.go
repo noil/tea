@@ -25,30 +25,51 @@ const (
 	TotalVideoViewType  EngagementType = "video_views" //`90days:false`
 )
 
-type Grouping map[string]*GroupBy
-
-type GroupBy struct {
-	Groups []Group `json:"group_by"`
+var defaultEngagementTypes = []EngagementType{
+	TotalImpressionType,
+	TotalEngagementType,
+	TotalFavoriteType,
+	TotalRetweetType,
+	TotalReplieType,
+	TotalVideoViewType,
 }
 
-type Group string
+type Grouping map[string]*Group
+
+type Group struct {
+	By []By `json:"group_by"`
+}
+
+type By string
 
 const (
-	TotalTweetIdGroup        Group = "tweet.id"
-	TotalEngagementTypeGroup Group = "engagement.type"
+	TotalTweetIdGroup        By = "tweet.id"
+	TotalEngagementTypeGroup By = "engagement.type"
 )
 
+var defaultGrouping = Grouping{
+	"default_grouping": &Group{
+		By: []By{
+			TotalTweetIdGroup,
+			TotalEngagementTypeGroup,
+		},
+	},
+}
+
 type Total struct {
-	tea             *TwitterEngagementAPI
 	TweetIds        []string         `json:"tweet_ids"`
 	EngagementTypes []EngagementType `json:"engagement_types"`
 	Groupings       Grouping         `json:"groupings"`
-	valid           bool
+	tea             *TwitterEngagementAPI
 	err             error
+	valid           bool
 }
 
 func (tea *TwitterEngagementAPI) Total(tweetIds []string) *Total {
-	total := &Total{tea: tea, valid: true}
+	total := &Total{
+		tea:   tea,
+		valid: true,
+	}
 	if 250 < len(tweetIds) {
 		total.valid = false
 		total.err = ErrExceedsMaxTweets
@@ -59,11 +80,17 @@ func (tea *TwitterEngagementAPI) Total(tweetIds []string) *Total {
 }
 
 func (total *Total) EngagementType(types []EngagementType) *Total {
+	if 0 == len(types) {
+		types = defaultEngagementTypes
+	}
 	total.EngagementTypes = types
 	return total
 }
 
 func (total *Total) Grouping(grouping Grouping) *Total {
+	if 0 == len(grouping) {
+		grouping = defaultGrouping
+	}
 	if 3 < len(grouping) {
 		total.valid = false
 		total.err = ErrExceedsMaxGroupings
@@ -80,12 +107,13 @@ func (total *Total) Error() error {
 	return total.err
 }
 
-func (total *Total) Result() (map[string]interface{}, error) {
+func (total *Total) Result() (*TotalResult, error) {
+	result := newTotalResult()
 	params, err := json.Marshal(total)
 	if nil != err {
-		return nil, err
+		return result, err
 	}
-	request, err := http.NewRequest("POST", totalUrl, bytes.NewBuffer(params))
+	request, err := http.NewRequestWithContext(total.tea.ctx, "POST", totalUrl, bytes.NewBuffer(params))
 	request.Header.Add("Accept-Encoding", "gzip")
 	request.Header.Add("Authorization", total.tea.OAuthHeader(totalUrl))
 	request.Header.Add("Content-Type", "application/json")
@@ -96,26 +124,25 @@ func (total *Total) Result() (map[string]interface{}, error) {
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return result, err
 	}
-
+	result.meta(response)
 	reader, err := gzip.NewReader(response.Body)
 	if nil != err {
-		return nil, err
+		return result, err
 	}
 	if http.StatusOK != response.StatusCode {
 		errors := &APIError{}
 		err = json.NewDecoder(reader).Decode(errors)
 		if nil != err {
-			return nil, err
+			return result, err
 		}
-		return nil, errors
+		return result, errors
 	}
-	success := Success{}
-	err = json.NewDecoder(reader).Decode(&success)
+	err = json.NewDecoder(reader).Decode(&result.Data)
 	if nil != err {
-		return nil, err
+		return result, err
 	}
 
-	return success, nil
+	return result, nil
 }

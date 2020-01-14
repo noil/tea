@@ -1,10 +1,14 @@
 package tea
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 type TwitterEngagementAPI struct {
-	Token      Token
+	ctx        context.Context
 	httpClient *http.Client
+	Token      Token
 }
 
 var totalUrl = "https://data-api.twitter.com/insights/engagement/totals"
@@ -18,8 +22,15 @@ type Token struct {
 	ConsumerKeySecret string
 }
 
-func New(token Token) *TwitterEngagementAPI {
-	return &TwitterEngagementAPI{Token: token, httpClient: defaultHttpClient()}
+func New(token Token, httpClient *http.Client) *TwitterEngagementAPI {
+	return NewWithContext(context.Background(), token, httpClient)
+}
+
+func NewWithContext(ctx context.Context, token Token, httpClient *http.Client) *TwitterEngagementAPI {
+	if nil == httpClient {
+		httpClient = http.DefaultClient
+	}
+	return &TwitterEngagementAPI{ctx: ctx, Token: token, httpClient: httpClient}
 }
 
 func (tea *TwitterEngagementAPI) Client(httpClient *http.Client) *TwitterEngagementAPI {
