@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+//A TwitterEngagementAPI is a struct that provide access to Twitter Engagement API.
 type TwitterEngagementAPI struct {
 	ctx        context.Context
 	httpClient *http.Client

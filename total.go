@@ -21,7 +21,7 @@ const (
 	TotalEngagementType EngagementType = "engagements" //`90days:true`
 	TotalFavoriteType   EngagementType = "favorites"   //`90days:false`
 	TotalRetweetType    EngagementType = "retweets"    //`90days:false`
-	TotalReplieType     EngagementType = "replies"     //`90days:false`
+	TotalReplyType      EngagementType = "replies"     //`90days:false`
 	TotalVideoViewType  EngagementType = "video_views" //`90days:false`
 )
 
@@ -30,7 +30,7 @@ var defaultEngagementTypes = []EngagementType{
 	TotalEngagementType,
 	TotalFavoriteType,
 	TotalRetweetType,
-	TotalReplieType,
+	TotalReplyType,
 	TotalVideoViewType,
 }
 
@@ -45,10 +45,13 @@ type By string
 const (
 	TotalTweetIdGroup        By = "tweet.id"
 	TotalEngagementTypeGroup By = "engagement.type"
+	TotalDefaultGrouping        = "default_grouping"
+	UnsupportedTweetIds         = "unsupported_for_impressions_engagements_tweet_ids"
+	UnavailableTweetIds         = "unavailable_tweet_ids"
 )
 
 var defaultGroupings = Grouping{
-	"default_grouping": &Group{
+	TotalDefaultGrouping: &Group{
 		By: []By{
 			TotalTweetIdGroup,
 			TotalEngagementTypeGroup,
@@ -79,26 +82,6 @@ func (tea *TwitterEngagementAPI) Total(tweetIds []string) *Total {
 	return total
 }
 
-func (total *Total) EngagementType(types []EngagementType) *Total {
-	if 0 == len(types) {
-		types = defaultEngagementTypes
-	}
-	total.EngagementTypes = types
-	return total
-}
-
-func (total *Total) Grouping(grouping Grouping) *Total {
-	if 0 == len(grouping) {
-		grouping = defaultGroupings
-	}
-	if 3 < len(grouping) {
-		total.valid = false
-		total.err = ErrExceedsMaxGroupings
-	}
-	total.Groupings = grouping
-	return total
-}
-
 func (total *Total) Valid() bool {
 	return total.valid
 }
@@ -107,36 +90,51 @@ func (total *Total) Error() error {
 	return total.err
 }
 
-func (total *Total) Result() (*TotalResult, error) {
+func (total *Total) do() (*http.Response, error) {
 	if 0 == len(total.EngagementTypes) {
 		total.EngagementTypes = defaultEngagementTypes
 	}
 	if 0 == len(total.Groupings) {
 		total.Groupings = defaultGroupings
 	}
-
-	result := newTotalResult()
 	params, err := json.Marshal(total)
 	if nil != err {
-		return result, err
+		total.err = err
+		total.valid = false
+		return nil, err
 	}
 	request, err := http.NewRequestWithContext(total.tea.ctx, "POST", totalUrl, bytes.NewBuffer(params))
 	request.Header.Add("Accept-Encoding", "gzip")
 	request.Header.Add("Authorization", total.tea.OAuthHeader(totalUrl))
 	request.Header.Add("Content-Type", "application/json")
 	response, err := total.tea.httpClient.Do(request)
+	if err != nil {
+		total.err = err
+		total.valid = false
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func (total *Total) Result() (*TotalAPISuccess, error) {
+	result := newTotalAPISuccess()
+	total.EngagementTypes = defaultEngagementTypes
+	total.Groupings = defaultGroupings
+	response, err := total.do()
+	if nil != err {
+		return result, err
+	}
 	defer func() {
 		if nil != response {
 			response.Body.Close()
 		}
 	}()
-	if err != nil {
-		return result, err
-	}
+
 	result.meta(response)
 	reader, err := gzip.NewReader(response.Body)
 	if nil != err {
-		return result, err
+		return nil, err
 	}
 	if http.StatusOK != response.StatusCode {
 		errors := &APIError{}
@@ -144,12 +142,66 @@ func (total *Total) Result() (*TotalResult, error) {
 		if nil != err {
 			return result, err
 		}
-		return result, errors
+		return nil, errors
 	}
-	err = json.NewDecoder(reader).Decode(&result.Data)
+	tmpSuccess := APISuccessRaw{}
+	err = json.NewDecoder(reader).Decode(&tmpSuccess)
 	if nil != err {
 		return result, err
 	}
+	result.populate(tmpSuccess)
+	return result, nil
+}
+
+func (total *Total) ResultRaw(grouping Grouping, types ...EngagementType) (*TotalAPISuccessRaw, error) {
+	total.grouping(grouping)
+	total.engagementType(types)
+	result := newTotalAPISuccessRaw()
+	response, err := total.do()
+	if nil != err {
+		return nil, err
+	}
+	defer func() {
+		if nil != response {
+			response.Body.Close()
+		}
+	}()
+
+	result.meta(response)
+	reader, err := gzip.NewReader(response.Body)
+	if nil != err {
+		return nil, err
+	}
+	if http.StatusOK != response.StatusCode {
+		errors := &APIError{}
+		err = json.NewDecoder(reader).Decode(errors)
+		if nil != err {
+			return nil, err
+		}
+		return nil, errors
+	}
+	err = json.NewDecoder(reader).Decode(&result.Data)
+	if nil != err {
+		return nil, err
+	}
 
 	return result, nil
+}
+
+func (total *Total) engagementType(types []EngagementType) {
+	if 0 == len(types) {
+		types = defaultEngagementTypes
+	}
+	total.EngagementTypes = types
+}
+
+func (total *Total) grouping(grouping Grouping) {
+	if 0 == len(grouping) {
+		grouping = defaultGroupings
+	}
+	if 3 < len(grouping) {
+		total.valid = false
+		total.err = ErrExceedsMaxGroupings
+	}
+	total.Groupings = grouping
 }
