@@ -3,14 +3,17 @@ package tea
 import (
 	"net/http"
 	"strconv"
+	"time"
 )
 
-type TotalAPISuccess struct {
-	Meta   HTTPMeta
+// Success struct Success
+type Success struct {
+	Meta   Meta
 	Tweets []Tweet
 	Types  Types
 }
 
+// Tweet struct Tweet
 type Tweet struct {
 	ID    string
 	Valid bool
@@ -18,49 +21,63 @@ type Tweet struct {
 	Types Types
 }
 
+// Types struct Types
 type Types struct {
-	Impression Type
-	Engagement Type
-	Favorite   Type
-	Retweet    Type
-	Reply      Type
-	VideoView  Type
+	Impression        Type
+	Engagement        Type
+	Favorite          Type
+	Retweet           Type
+	Reply             Type
+	VideoView         Type
+	MediaView         Type
+	MediaEngagement   Type
+	URLClick          Type
+	HashtagClick      Type
+	DetailClick       Type
+	PermalinkClick    Type
+	AppInstallAttempt Type
+	AppOpen           Type
+	TweetEmail        Type
+	UserFollow        Type
+	UserProfileClick  Type
 }
 
+// Type struct Type
 type Type struct {
 	Valid bool
 	Int64 int64
 }
 
-func newTotalAPISuccess() *TotalAPISuccess {
-	return &TotalAPISuccess{
-		Meta: HTTPMeta{Headers: make(Headers)},
+func newSuccess() *Success {
+	return &Success{
+		Meta: Meta{HTTP: HTTP{Headers: make(map[string]string)}},
 	}
 }
 
-func (result *TotalAPISuccess) meta(response *http.Response) {
+func (result *Success) meta(response *http.Response) {
 	if nil != response {
-		result.Meta.Code = response.StatusCode
-		result.Meta.Headers = headers(response)
+		result.Meta.HTTP.Code = response.StatusCode
+		result.Meta.HTTP.Headers = headers(response)
 	}
 }
 
-func (result *TotalAPISuccess) populate(data APISuccessRaw) {
+func (result *Success) populate(data SuccessRaw) {
 	var (
 		types map[string]interface{}
 		tweet map[string]interface{}
 		ids   []interface{}
 		ok    bool
+		dt    time.Time
 	)
 	for label, tweets := range data {
 		switch label {
-		case TotalDefaultGrouping:
+		case defaultGrouping:
 			if tweet, ok = tweets.(map[string]interface{}); !ok {
 				continue
 			}
-			for tweetId, insights := range tweet {
+			for tweetID, insights := range tweet {
 				tweet := Tweet{
-					ID:    tweetId,
+					ID:    tweetID,
 					Valid: true,
 				}
 				if types, ok = insights.(map[string]interface{}); !ok {
@@ -77,32 +94,32 @@ func (result *TotalAPISuccess) populate(data APISuccessRaw) {
 					}
 					tweet.Value += i
 					switch EngagementType(metric) {
-					case TotalImpressionType:
+					case ImpressionType:
 						tweet.Types.Impression.Int64 += i
 						tweet.Types.Impression.Valid = true
 						result.Types.Impression.Int64 += i
 						result.Types.Impression.Valid = true
-					case TotalEngagementType:
+					case EngType:
 						tweet.Types.Engagement.Int64 += i
 						tweet.Types.Engagement.Valid = true
 						result.Types.Engagement.Int64 += i
 						result.Types.Engagement.Valid = true
-					case TotalFavoriteType:
+					case FavoriteType:
 						tweet.Types.Favorite.Int64 += i
 						tweet.Types.Favorite.Valid = true
 						result.Types.Favorite.Int64 += i
 						result.Types.Favorite.Valid = true
-					case TotalRetweetType:
+					case RetweetType:
 						tweet.Types.Retweet.Int64 += i
 						tweet.Types.Retweet.Valid = true
 						result.Types.Retweet.Int64 += i
 						result.Types.Retweet.Valid = true
-					case TotalReplyType:
+					case ReplyType:
 						tweet.Types.Reply.Int64 += i
 						tweet.Types.Reply.Valid = true
 						result.Types.Reply.Int64 += i
 						result.Types.Reply.Valid = true
-					case TotalVideoViewType:
+					case VideoViewType:
 						tweet.Types.VideoView.Int64 += i
 						tweet.Types.VideoView.Valid = true
 						result.Types.VideoView.Int64 += i
@@ -112,8 +129,8 @@ func (result *TotalAPISuccess) populate(data APISuccessRaw) {
 				}
 				result.Tweets = append(result.Tweets, tweet)
 			}
-		case UnsupportedTweetIds:
-		case UnavailableTweetIds:
+		case unsupportedTweetIds:
+		case unavailableTweetIds:
 			if ids, ok = tweets.([]interface{}); !ok {
 				continue
 			}
@@ -126,6 +143,16 @@ func (result *TotalAPISuccess) populate(data APISuccessRaw) {
 					result.Tweets = append(result.Tweets, tweet)
 				}
 			}
+		case start:
+			if dt, ok = tweets.(time.Time); !ok {
+				continue
+			}
+			result.Meta.Start = Duration{Valid: true, Time: dt}
+		case end:
+			if dt, ok = tweets.(time.Time); !ok {
+				continue
+			}
+			result.Meta.End = Duration{Valid: true, Time: dt}
 		}
 	}
 }

@@ -2,6 +2,7 @@ package tea
 
 import "fmt"
 
+// APIError struct APIError
 type APIError struct {
 	Errors []string `json:"errors"`
 }

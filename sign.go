@@ -28,22 +28,22 @@ func nonce() string {
 	return hex.EncodeToString(nonce)
 }
 
-func (tea *TwitterEngagementAPI) OAuthHeader(signingUrl string) string {
+func (tea *TwitterEngagementAPI) oauthHeader(signingURL string) string {
 	oauthParams := map[string]string{
-		"oauth_consumer_key":     tea.Token.ConsumerKey,
+		"oauth_consumer_key":     tea.token.ConsumerKey,
 		"oauth_nonce":            nonce(),
 		"oauth_signature_method": "HMAC-SHA1",
 		"oauth_timestamp":        timestamp(),
-		"oauth_token":            tea.Token.Access,
+		"oauth_token":            tea.token.Access,
 		"oauth_version":          "1.0",
 	}
 	signatureParts := []string{
 		"POST",
-		url.QueryEscape(signingUrl),
+		url.QueryEscape(signingURL),
 		url.QueryEscape(sortedQueryString(oauthParams)),
 	}
 	signatureBase := strings.Join(signatureParts, "&")
-	signingKey := tea.Token.ConsumerKeySecret + "&" + tea.Token.AccessSecret
+	signingKey := tea.token.ConsumerKeySecret + "&" + tea.token.AccessSecret
 	signer := hmac.New(sha1.New, []byte(signingKey))
 	signer.Write([]byte(signatureBase))
 	oauthParams["oauth_signature"] = base64.StdEncoding.EncodeToString(signer.Sum(nil))
@@ -57,9 +57,9 @@ func (tea *TwitterEngagementAPI) OAuthHeader(signingUrl string) string {
 	buf.WriteString("OAuth")
 	for _, v := range oauthParamKeys {
 		buf.WriteByte(' ')
-		buf.WriteString(Rfc3986Escape(v))
+		buf.WriteString(rfc3986Escape(v))
 		buf.WriteString("=\"")
-		buf.WriteString(Rfc3986Escape(oauthParams[v]))
+		buf.WriteString(rfc3986Escape(oauthParams[v]))
 		buf.WriteString("\",")
 	}
 	oauth := buf.String()
@@ -73,7 +73,7 @@ func sortedQueryString(values map[string]string) string {
 	}
 	pairs := make(sortedPairs, 0)
 	for k, v := range values {
-		pairs = append(pairs, pair{Rfc3986Escape(k), Rfc3986Escape(v)})
+		pairs = append(pairs, pair{rfc3986Escape(k), rfc3986Escape(v)})
 	}
 	sort.Sort(pairs)
 	buf := new(bytes.Buffer)
@@ -96,21 +96,22 @@ type sortedPairs []pair
 func (sp sortedPairs) Len() int {
 	return len(sp)
 }
-func (p sortedPairs) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
+
+func (sp sortedPairs) Swap(i, j int) {
+	sp[i], sp[j] = sp[j], sp[i]
 }
 
-func (p sortedPairs) Less(i, j int) bool {
-	if p[i].k == p[j].k {
-		return p[i].v < p[j].v
+func (sp sortedPairs) Less(i, j int) bool {
+	if sp[i].k == sp[j].k {
+		return sp[i].v < sp[j].v
 	}
-	return p[i].k < p[j].k
+	return sp[i].k < sp[j].k
 }
 
 // Escapes a string more in line with Rfc3986 than http.URLEscape.
 // URLEscape was converting spaces to "+" instead of "%20", which was messing up
 // the signing of requests.
-func Rfc3986Escape(input string) string {
+func rfc3986Escape(input string) string {
 	firstEsc := -1
 	b := []byte(input)
 	for i, c := range b {

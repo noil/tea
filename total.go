@@ -1,7 +1,6 @@
 package tea
 
 import (
-	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -9,155 +8,60 @@ import (
 )
 
 var (
-	ErrExceedsMaxTweets    = errors.New("number of tweets exceeds 250")
+	// ErrExceedsMaxTweets shows that you reach max count of tweets. (250 max)
+	ErrExceedsMaxTweets = errors.New("number of tweets exceeds 250")
+	// ErrExceedsMaxGroupings provide that you reach max counf of grouping. (3 max)
 	ErrExceedsMaxGroupings = errors.New("number of groupings exceeds 3")
-	ErrHTTPBadCode         = errors.New("HTTP bad code")
+	// ErrHTTPBadCode provide that twitter return error
+	ErrHTTPBadCode = errors.New("HTTP bad code")
 )
 
-type EngagementType string
-
-const (
-	TotalImpressionType EngagementType = "impressions" //`90days:true`
-	TotalEngagementType EngagementType = "engagements" //`90days:true`
-	TotalFavoriteType   EngagementType = "favorites"   //`90days:false`
-	TotalRetweetType    EngagementType = "retweets"    //`90days:false`
-	TotalReplyType      EngagementType = "replies"     //`90days:false`
-	TotalVideoViewType  EngagementType = "video_views" //`90days:false`
-)
-
-var defaultEngagementTypes = []EngagementType{
-	TotalImpressionType,
-	TotalEngagementType,
-	TotalFavoriteType,
-	TotalRetweetType,
-	TotalReplyType,
-	TotalVideoViewType,
+var defaultTotalEngagementTypes = []EngagementType{
+	ImpressionType,
+	EngType,
+	FavoriteType,
+	RetweetType,
+	ReplyType,
+	VideoViewType,
 }
 
-type Grouping map[string]*Group
-
-type Group struct {
-	By []By `json:"group_by"`
-}
-
-type By string
-
 const (
-	TotalTweetIdGroup        By = "tweet.id"
-	TotalEngagementTypeGroup By = "engagement.type"
-	TotalDefaultGrouping        = "default_grouping"
-	UnsupportedTweetIds         = "unsupported_for_impressions_engagements_tweet_ids"
-	UnavailableTweetIds         = "unavailable_tweet_ids"
+	maxTotalTweets = 250
 )
 
-var defaultGroupings = Grouping{
-	TotalDefaultGrouping: &Group{
-		By: []By{
-			TotalTweetIdGroup,
-			TotalEngagementTypeGroup,
+var defaultTotalGroupings = Grouping{
+	defaultGrouping: &Group{
+		By: []GroupByType{
+			TweetIDGroup,
+			EngagementTypeGroup,
 		},
 	},
 }
 
-type Total struct {
+// Total struct
+type total struct {
 	TweetIds        []string         `json:"tweet_ids"`
 	EngagementTypes []EngagementType `json:"engagement_types"`
 	Groupings       Grouping         `json:"groupings"`
-	tea             *TwitterEngagementAPI
-	err             error
-	valid           bool
 }
 
-func (tea *TwitterEngagementAPI) Total(tweetIds []string) *Total {
-	total := &Total{
-		tea:   tea,
-		valid: true,
+// TotalRaw return pointer for struct ResponseRaw
+func (tea *TwitterEngagementAPI) TotalRaw(tweetIds []string, types []EngagementType, groups Groups) (*ResponseRaw, error) {
+	if maxTotalTweets < len(tweetIds) {
+		return nil, ErrExceedsMaxTweets
 	}
-	if 250 < len(tweetIds) {
-		total.valid = false
-		total.err = ErrExceedsMaxTweets
-	} else {
-		total.TweetIds = tweetIds
-	}
-	return total
-}
-
-func (total *Total) Valid() bool {
-	return total.valid
-}
-
-func (total *Total) Error() error {
-	return total.err
-}
-
-func (total *Total) do() (*http.Response, error) {
-	if 0 == len(total.EngagementTypes) {
-		total.EngagementTypes = defaultEngagementTypes
-	}
-	if 0 == len(total.Groupings) {
-		total.Groupings = defaultGroupings
-	}
-	params, err := json.Marshal(total)
-	if nil != err {
-		total.err = err
-		total.valid = false
-		return nil, err
-	}
-	request, err := http.NewRequestWithContext(total.tea.ctx, "POST", totalUrl, bytes.NewBuffer(params))
-	request.Header.Add("Accept-Encoding", "gzip")
-	request.Header.Add("Authorization", total.tea.OAuthHeader(totalUrl))
-	request.Header.Add("Content-Type", "application/json")
-	response, err := total.tea.httpClient.Do(request)
+	total := &total{}
+	total.TweetIds = tweetIds
+	err := total.groups(groups)
 	if err != nil {
-		total.err = err
-		total.valid = false
 		return nil, err
 	}
-
-	return response, nil
-}
-
-func (total *Total) Result() (*TotalAPISuccess, error) {
-	result := newTotalAPISuccess()
-	total.EngagementTypes = defaultEngagementTypes
-	total.Groupings = defaultGroupings
-	response, err := total.do()
-	if nil != err {
-		return result, err
-	}
-	defer func() {
-		if nil != response {
-			response.Body.Close()
-		}
-	}()
-
-	result.meta(response)
-	reader, err := gzip.NewReader(response.Body)
-	if nil != err {
-		return nil, err
-	}
-	if http.StatusOK != response.StatusCode {
-		errors := &APIError{}
-		err = json.NewDecoder(reader).Decode(errors)
-		if nil != err {
-			return result, err
-		}
-		return nil, errors
-	}
-	tmpSuccess := APISuccessRaw{}
-	err = json.NewDecoder(reader).Decode(&tmpSuccess)
-	if nil != err {
-		return result, err
-	}
-	result.populate(tmpSuccess)
-	return result, nil
-}
-
-func (total *Total) ResultRaw(grouping Grouping, types ...EngagementType) (*TotalAPISuccessRaw, error) {
-	total.grouping(grouping)
 	total.engagementType(types)
-	result := newTotalAPISuccessRaw()
-	response, err := total.do()
+	if err != nil {
+		return nil, err
+	}
+	result := newResponseRaw()
+	response, err := tea.do(totalURL, total)
 	if nil != err {
 		return nil, err
 	}
@@ -188,20 +92,70 @@ func (total *Total) ResultRaw(grouping Grouping, types ...EngagementType) (*Tota
 	return result, nil
 }
 
-func (total *Total) engagementType(types []EngagementType) {
-	if 0 == len(types) {
-		types = defaultEngagementTypes
+// Total return pointer for struct Success
+func (tea *TwitterEngagementAPI) Total(tweetIds []string) (*Success, error) {
+	if maxTotalTweets < len(tweetIds) {
+		return nil, ErrExceedsMaxTweets
 	}
-	total.EngagementTypes = types
+	total := &total{}
+	total.TweetIds = tweetIds
+	total.EngagementTypes = defaultTotalEngagementTypes
+	total.Groupings = defaultTotalGroupings
+	result := newSuccess()
+	response, err := tea.do(totalURL, total)
+	if nil != err {
+		return result, err
+	}
+	defer func() {
+		if nil != response {
+			response.Body.Close()
+		}
+	}()
+	result.meta(response)
+	reader, err := gzip.NewReader(response.Body)
+	if nil != err {
+		return nil, err
+	}
+	if http.StatusOK != response.StatusCode {
+		errors := &APIError{}
+		err = json.NewDecoder(reader).Decode(errors)
+		if nil != err {
+			return result, err
+		}
+		return nil, errors
+	}
+	tmpSuccess := SuccessRaw{}
+	err = json.NewDecoder(reader).Decode(&tmpSuccess)
+	if nil != err {
+		return result, err
+	}
+	result.populate(tmpSuccess)
+	return result, nil
 }
 
-func (total *Total) grouping(grouping Grouping) {
-	if 0 == len(grouping) {
-		grouping = defaultGroupings
+func (total *total) engagementType(types []EngagementType) error {
+	if 0 == len(types) {
+		types = defaultTotalEngagementTypes
 	}
-	if 3 < len(grouping) {
-		total.valid = false
-		total.err = ErrExceedsMaxGroupings
+	total.EngagementTypes = types
+
+	//TODO: implement checking for using valid type for each endpoints
+	return nil
+}
+
+func (total *total) groups(groups Groups) error {
+	if 0 == len(groups) {
+		total.Groupings = defaultTotalGroupings
+	} else {
+		if 3 < len(groups) {
+			return ErrExceedsMaxGroupings
+		}
+		tmpGrouping := make(Grouping)
+		for label, values := range groups {
+			tmpGrouping[label] = &Group{By: values}
+		}
+
+		total.Groupings = tmpGrouping
 	}
-	total.Groupings = grouping
+	return nil
 }
