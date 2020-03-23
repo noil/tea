@@ -67,7 +67,6 @@ func (result *Success) populate(data SuccessRaw) {
 		tweet map[string]interface{}
 		ids   []interface{}
 		ok    bool
-		dt    time.Time
 	)
 	for label, tweets := range data {
 		switch label {
@@ -124,8 +123,62 @@ func (result *Success) populate(data SuccessRaw) {
 						tweet.Types.VideoView.Valid = true
 						result.Types.VideoView.Int64 += i
 						result.Types.VideoView.Valid = true
+					case MediaViewsType:
+						tweet.Types.MediaView.Int64 += i
+						tweet.Types.MediaView.Valid = true
+						result.Types.MediaView.Int64 += i
+						result.Types.MediaView.Valid = true
+					case MediaEngagementsType:
+						tweet.Types.MediaEngagement.Int64 += i
+						tweet.Types.MediaEngagement.Valid = true
+						result.Types.MediaEngagement.Int64 += i
+						result.Types.MediaEngagement.Valid = true
+					case URLClicksType:
+						tweet.Types.URLClick.Int64 += i
+						tweet.Types.URLClick.Valid = true
+						result.Types.URLClick.Int64 += i
+						result.Types.URLClick.Valid = true
+					case HashTagClicksType:
+						tweet.Types.HashtagClick.Int64 += i
+						tweet.Types.HashtagClick.Valid = true
+						result.Types.HashtagClick.Int64 += i
+						result.Types.HashtagClick.Valid = true
+					case DetailExpandsType:
+						tweet.Types.DetailClick.Int64 += i
+						tweet.Types.DetailClick.Valid = true
+						result.Types.DetailClick.Int64 += i
+						result.Types.DetailClick.Valid = true
+					case PermalinkClicksType:
+						tweet.Types.PermalinkClick.Int64 += i
+						tweet.Types.PermalinkClick.Valid = true
+						result.Types.PermalinkClick.Int64 += i
+						result.Types.PermalinkClick.Valid = true
+					case AppInstallAttemptsType:
+						tweet.Types.AppInstallAttempt.Int64 += i
+						tweet.Types.AppInstallAttempt.Valid = true
+						result.Types.AppInstallAttempt.Int64 += i
+						result.Types.AppInstallAttempt.Valid = true
+					case AppOpensType:
+						tweet.Types.AppOpen.Int64 += i
+						tweet.Types.AppOpen.Valid = true
+						result.Types.AppOpen.Int64 += i
+						result.Types.AppOpen.Valid = true
+					case EmailTweetType:
+						tweet.Types.TweetEmail.Int64 += i
+						tweet.Types.TweetEmail.Valid = true
+						result.Types.TweetEmail.Int64 += i
+						result.Types.TweetEmail.Valid = true
+					case UserFollowsType:
+						tweet.Types.UserFollow.Int64 += i
+						tweet.Types.UserFollow.Valid = true
+						result.Types.UserFollow.Int64 += i
+						result.Types.UserFollow.Valid = true
+					case UserProfileClicksType:
+						tweet.Types.UserProfileClick.Int64 += i
+						tweet.Types.UserProfileClick.Valid = true
+						result.Types.UserProfileClick.Int64 += i
+						result.Types.UserProfileClick.Valid = true
 					}
-
 				}
 				result.Tweets = append(result.Tweets, tweet)
 			}
@@ -144,13 +197,23 @@ func (result *Success) populate(data SuccessRaw) {
 				}
 			}
 		case start:
-			if dt, ok = tweets.(time.Time); !ok {
+			var tmpDt string
+			if tmpDt, ok = tweets.(string); !ok {
 				continue
+			}
+			dt, err := time.Parse("2006-01-02T15:04:05Z", tmpDt)
+			if nil != err {
+				result.Meta.Start = Duration{Valid: false, Time: dt}
 			}
 			result.Meta.Start = Duration{Valid: true, Time: dt}
 		case end:
-			if dt, ok = tweets.(time.Time); !ok {
+			var tmpDt string
+			if tmpDt, ok = tweets.(string); !ok {
 				continue
+			}
+			dt, err := time.Parse("2016-01-02T15:04:05Z", tmpDt)
+			if nil != err {
+				result.Meta.End = Duration{Valid: false, Time: dt}
 			}
 			result.Meta.End = Duration{Valid: true, Time: dt}
 		}
