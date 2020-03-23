@@ -211,7 +211,7 @@ func (result *Success) populate(data SuccessRaw) {
 			if tmpDt, ok = tweets.(string); !ok {
 				continue
 			}
-			dt, err := time.Parse("2016-01-02T15:04:05Z", tmpDt)
+			dt, err := time.Parse("2006-01-02T15:04:05Z", tmpDt)
 			if nil != err {
 				result.Meta.End = Duration{Valid: false, Time: dt}
 			}
