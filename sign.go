@@ -2,15 +2,19 @@ package tea
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,7 +32,64 @@ func nonce() string {
 	return hex.EncodeToString(nonce)
 }
 
-func (tea *TwitterEngagementAPI) oauthHeader(signingURL string) string {
+func (tea *TwitterEngagementAPI) oauthHeader(signingURL string) (string, error) {
+	if !tea.appOnly {
+		return tea.clientOauthHeader(signingURL)
+	}
+	return tea.appOauthHeader(signingURL)
+
+}
+
+func (tea *TwitterEngagementAPI) appOauthHeader(signingURL string) (string, error) {
+	encodedConsumerKey := url.QueryEscape(tea.token.ConsumerKey)
+	encodedConsumerKeySecret := url.QueryEscape(tea.token.ConsumerKeySecret)
+	b64 := bytes.Buffer{}
+	b64.WriteString(encodedConsumerKey)
+	b64.WriteString(":")
+	b64.WriteString(encodedConsumerKeySecret)
+	basic := bytes.Buffer{}
+	basic.WriteString("Basic ")
+	basic.WriteString(base64.StdEncoding.EncodeToString(b64.Bytes()))
+	data := url.Values{}
+	data.Set("grant_type", "client_credentials")
+	request, err := http.NewRequestWithContext(tea.ctx, "POST", oauth2TokenURL, strings.NewReader(data.Encode()))
+	request.Header.Add("Accept-Encoding", "gzip")
+	request.Header.Add("Authorization", basic.String())
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
+	request.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
+	response, err := tea.httpClient.Do(request)
+	if nil != err {
+		return "", err
+	}
+	defer func() {
+		if nil != response {
+			response.Body.Close()
+		}
+	}()
+	reader, err := gzip.NewReader(response.Body)
+	if nil != err {
+		return "", err
+	}
+	if http.StatusOK != response.StatusCode {
+		errors := &APIError{}
+		err = json.NewDecoder(reader).Decode(errors)
+		if nil != err {
+			return "", err
+		}
+		return "", errors
+	}
+	oauthToken := &appOAuthToken{}
+	err = json.NewDecoder(reader).Decode(&oauthToken)
+	if nil != err {
+		return "", err
+	}
+	bearer := bytes.Buffer{}
+	bearer.WriteString("Bearer ")
+	bearer.WriteString(oauthToken.Value)
+	return bearer.String(), nil
+}
+
+func (tea *TwitterEngagementAPI) clientOauthHeader(signingURL string) (string, error) {
 	oauthParams := map[string]string{
 		"oauth_consumer_key":     tea.token.ConsumerKey,
 		"oauth_nonce":            nonce(),
@@ -64,7 +125,7 @@ func (tea *TwitterEngagementAPI) oauthHeader(signingURL string) string {
 	}
 	oauth := buf.String()
 
-	return oauth[:len(oauth)-1]
+	return oauth[:len(oauth)-1], nil
 }
 
 func sortedQueryString(values map[string]string) string {

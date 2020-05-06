@@ -20,16 +20,26 @@ type TwitterEngagementAPI struct {
 	ctx        context.Context
 	httpClient *http.Client
 	token      Token
+	appOnly    bool
 }
 
-var totalURL = "https://data-api.twitter.com/insights/engagement/totals"
-var eng28hrURL = "https://data-api.twitter.com/insights/engagement/28hr"
-var historicalURL = "https://data-api.twitter.com/insights/engagement/historical"
+var (
+	totalURL       = "https://data-api.twitter.com/insights/engagement/totals"
+	eng28hrURL     = "https://data-api.twitter.com/insights/engagement/28hr"
+	historicalURL  = "https://data-api.twitter.com/insights/engagement/historical"
+	oauth2TokenURL = "https://api.twitter.com/oauth2/token"
+)
 
-// Token struct token
+// Token struct Token
 type Token struct {
 	Access            string
 	AccessSecret      string
+	ConsumerKey       string
+	ConsumerKeySecret string
+}
+
+// AppOnlyToken struct AppOnlyToken
+type AppOnlyToken struct {
 	ConsumerKey       string
 	ConsumerKeySecret string
 }
@@ -45,6 +55,20 @@ func NewWithContext(ctx context.Context, token Token, httpClient *http.Client) *
 		httpClient = http.DefaultClient
 	}
 	return &TwitterEngagementAPI{ctx: ctx, token: token, httpClient: httpClient}
+}
+
+// NewAppOnly creates an instance of TwitterEngagementAPI App Only
+func NewAppOnly(token AppOnlyToken, httpClient *http.Client) *TwitterEngagementAPI {
+	return NewAppOnlyWithContext(context.Background(), token, httpClient)
+}
+
+// NewAppOnlyWithContext creates an instance of TwitterEngagementAPI App Only with context
+func NewAppOnlyWithContext(ctx context.Context, token AppOnlyToken, httpClient *http.Client) *TwitterEngagementAPI {
+	if nil == httpClient {
+		httpClient = http.DefaultClient
+	}
+	tmpToken := Token{ConsumerKey: token.ConsumerKey, ConsumerKeySecret: token.ConsumerKeySecret}
+	return &TwitterEngagementAPI{ctx: ctx, token: tmpToken, httpClient: httpClient, appOnly: true}
 }
 
 // Client provide to replace default http.Client
@@ -68,7 +92,11 @@ func (tea *TwitterEngagementAPI) do(url string, data interface{}) (*http.Respons
 	params, err := json.Marshal(data)
 	request, err := http.NewRequestWithContext(tea.ctx, "POST", url, bytes.NewBuffer(params))
 	request.Header.Add("Accept-Encoding", "gzip")
-	request.Header.Add("Authorization", tea.oauthHeader(url))
+	header, err := tea.oauthHeader(url)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Add("Authorization", header)
 	request.Header.Add("Content-Type", "application/json")
 	response, err := tea.httpClient.Do(request)
 	if err != nil {

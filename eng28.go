@@ -9,15 +9,15 @@ import (
 )
 
 const (
-	maxHistoricalTweets = 25
+	maxEng28Tweets = 25
 )
 
 var (
-	// ErrExceedsMaxHistoricalTweets provide that you reach max count of tweets. (25 max)
-	ErrExceedsMaxHistoricalTweets = errors.New("number of tweets exceeds 25")
+	// ErrExceedsMaxEng28Tweets provide that you reach max count of tweets. (25 max)
+	ErrExceedsMaxEng28Tweets = errors.New("number of tweets exceeds 25")
 )
 
-var defaultHistoricalEngagementTypes = []EngagementType{
+var defaultEng28EngagementTypes = []EngagementType{
 	ImpressionType,
 	EngType,
 	FavoriteType,
@@ -37,7 +37,7 @@ var defaultHistoricalEngagementTypes = []EngagementType{
 	UserProfileClicksType,
 }
 
-var defaultHistoricalGroupings = Grouping{
+var defaultEng28Groupings = Grouping{
 	defaultGrouping: &Group{
 		By: []GroupByType{
 			TweetIDGroup,
@@ -47,34 +47,30 @@ var defaultHistoricalGroupings = Grouping{
 	},
 }
 
-// Historical struct Historical
-type historical struct {
+// Eng28 struct Eng28
+type eng28 struct {
 	TweetIds        []string         `json:"tweet_ids"`
 	EngagementTypes []EngagementType `json:"engagement_types"`
 	Groupings       Grouping         `json:"groupings"`
-	Start           string           `json:"start"`
-	End             string           `json:"end"`
 }
 
-// HistoricalRaw return pointer for struct ResponseRaw
-func (tea *TwitterEngagementAPI) HistoricalRaw(tweetIds []string, types []EngagementType, groups Groups, from, to time.Time) (*ResponseRaw, error) {
-	if maxHistoricalTweets < len(tweetIds) {
-		return nil, ErrExceedsMaxHistoricalTweets
+// Eng28Raw return pointer for struct ResponseRaw
+func (tea *TwitterEngagementAPI) Eng28Raw(tweetIds []string, types []EngagementType, groups Groups, from, to time.Time) (*ResponseRaw, error) {
+	if maxEng28Tweets < len(tweetIds) {
+		return nil, ErrExceedsMaxEng28Tweets
 	}
-	historical := &historical{}
-	historical.TweetIds = tweetIds
-	historical.Start = from.Format("2006-01-02")
-	historical.End = to.Format("2006-01-02")
-	err := historical.groups(groups)
+	eng28 := &eng28{}
+	eng28.TweetIds = tweetIds
+	err := eng28.groups(groups)
 	if err != nil {
 		return nil, err
 	}
-	historical.engagementType(types)
+	eng28.engagementType(types)
 	if err != nil {
 		return nil, err
 	}
 	result := newResponseRaw()
-	response, err := tea.do(historicalURL, historical)
+	response, err := tea.do(eng28hrURL, eng28)
 	if nil != err {
 		return nil, err
 	}
@@ -105,19 +101,17 @@ func (tea *TwitterEngagementAPI) HistoricalRaw(tweetIds []string, types []Engage
 	return result, nil
 }
 
-// Historical return pointer for struct Success
-func (tea *TwitterEngagementAPI) Historical(tweetIds []string, from, to time.Time) (*Success, error) {
-	if maxHistoricalTweets < len(tweetIds) {
-		return nil, ErrExceedsMaxHistoricalTweets
+// Eng28 return pointer for struct Success
+func (tea *TwitterEngagementAPI) Eng28(tweetIds []string, from, to time.Time) (*Success, error) {
+	if maxEng28Tweets < len(tweetIds) {
+		return nil, ErrExceedsMaxEng28Tweets
 	}
-	historical := &historical{}
-	historical.TweetIds = tweetIds
-	historical.Start = from.Format("2006-01-02")
-	historical.End = to.Format("2006-01-02")
-	historical.EngagementTypes = defaultHistoricalEngagementTypes
-	historical.Groupings = defaultHistoricalGroupings
+	eng28 := &eng28{}
+	eng28.TweetIds = tweetIds
+	eng28.EngagementTypes = defaultEng28EngagementTypes
+	eng28.Groupings = defaultEng28Groupings
 	result := newSuccess()
-	response, err := tea.do(historicalURL, historical)
+	response, err := tea.do(eng28hrURL, eng28)
 	if nil != err {
 		return result, err
 	}
@@ -148,19 +142,19 @@ func (tea *TwitterEngagementAPI) Historical(tweetIds []string, from, to time.Tim
 	return result, nil
 }
 
-func (historical *historical) engagementType(types []EngagementType) error {
+func (eng28 *eng28) engagementType(types []EngagementType) error {
 	if 0 == len(types) {
-		types = defaultHistoricalEngagementTypes
+		types = defaultEng28EngagementTypes
 	}
-	historical.EngagementTypes = types
+	eng28.EngagementTypes = types
 
 	//TODO: implement checking for using valid type for each endpoints
 	return nil
 }
 
-func (historical *historical) groups(groups Groups) error {
+func (eng28 *eng28) groups(groups Groups) error {
 	if 0 == len(groups) {
-		historical.Groupings = defaultHistoricalGroupings
+		eng28.Groupings = defaultEng28Groupings
 	} else {
 		if 3 < len(groups) {
 			return ErrExceedsMaxGroupings
@@ -170,7 +164,7 @@ func (historical *historical) groups(groups Groups) error {
 			tmpGrouping[label] = &Group{By: values}
 		}
 
-		historical.Groupings = tmpGrouping
+		eng28.Groupings = tmpGrouping
 	}
 	return nil
 }

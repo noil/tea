@@ -25,6 +25,13 @@ var defaultTotalEngagementTypes = []EngagementType{
 	VideoViewType,
 }
 
+var defaultAppOnlyTotalEngagementTypes = []EngagementType{
+	FavoriteType,
+	RetweetType,
+	ReplyType,
+	VideoViewType,
+}
+
 const (
 	maxTotalTweets = 250
 )
@@ -56,7 +63,7 @@ func (tea *TwitterEngagementAPI) TotalRaw(tweetIds []string, types []EngagementT
 	if err != nil {
 		return nil, err
 	}
-	total.engagementType(types)
+	total.engagementType(types, tea.appOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +84,7 @@ func (tea *TwitterEngagementAPI) TotalRaw(tweetIds []string, types []EngagementT
 		return nil, err
 	}
 	if http.StatusOK != response.StatusCode {
-		errors := &APIError{}
+		errors := &EngAPIError{}
 		err = json.NewDecoder(reader).Decode(errors)
 		if nil != err {
 			return nil, err
@@ -99,7 +106,11 @@ func (tea *TwitterEngagementAPI) Total(tweetIds []string) (*Success, error) {
 	}
 	total := &total{}
 	total.TweetIds = tweetIds
-	total.EngagementTypes = defaultTotalEngagementTypes
+	if tea.appOnly {
+		total.EngagementTypes = defaultAppOnlyTotalEngagementTypes
+	} else {
+		total.EngagementTypes = defaultTotalEngagementTypes
+	}
 	total.Groupings = defaultTotalGroupings
 	result := newSuccess()
 	response, err := tea.do(totalURL, total)
@@ -117,7 +128,7 @@ func (tea *TwitterEngagementAPI) Total(tweetIds []string) (*Success, error) {
 		return nil, err
 	}
 	if http.StatusOK != response.StatusCode {
-		errors := &APIError{}
+		errors := &EngAPIError{}
 		err = json.NewDecoder(reader).Decode(errors)
 		if nil != err {
 			return result, err
@@ -133,9 +144,13 @@ func (tea *TwitterEngagementAPI) Total(tweetIds []string) (*Success, error) {
 	return result, nil
 }
 
-func (total *total) engagementType(types []EngagementType) error {
+func (total *total) engagementType(types []EngagementType, appOnly bool) error {
 	if 0 == len(types) {
-		types = defaultTotalEngagementTypes
+		if appOnly {
+			types = defaultAppOnlyTotalEngagementTypes
+		} else {
+			types = defaultTotalEngagementTypes
+		}
 	}
 	total.EngagementTypes = types
 
