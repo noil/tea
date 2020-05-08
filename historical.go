@@ -4,10 +4,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io/ioutil"
 	"net/http"
-	"os"
 	"time"
 )
 
@@ -188,9 +185,6 @@ func (tea *TwitterEngagementAPI) HistoricalPerDay(tweetIds []string, from, to ti
 	if nil != err {
 		return nil, err
 	}
-	b, _ := ioutil.ReadAll(reader)
-	fmt.Println(string(b))
-	os.Exit(1)
 	if http.StatusOK != response.StatusCode {
 		errors := &EngAPIError{}
 		err = json.NewDecoder(reader).Decode(errors)
