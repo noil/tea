@@ -4,7 +4,10 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -37,15 +40,26 @@ var defaultHistoricalEngagementTypes = []EngagementType{
 	UserProfileClicksType,
 }
 
-var defaultHistoricalGroupings = Grouping{
-	defaultGrouping: &Group{
-		By: []GroupByType{
-			TweetIDGroup,
-			EngagementTypeGroup,
-			// EngagementDayGroup,
+var (
+	defaultHistoricalGroupings = Grouping{
+		defaultGrouping: &Group{
+			By: []GroupByType{
+				TweetIDGroup,
+				EngagementTypeGroup,
+			},
 		},
-	},
-}
+	}
+
+	defaultHistoricalPerDayGroupings = Grouping{
+		defaultGrouping: &Group{
+			By: []GroupByType{
+				TweetIDGroup,
+				EngagementTypeGroup,
+				EngagementDayGroup,
+			},
+		},
+	}
+)
 
 // Historical struct Historical
 type historical struct {
@@ -131,6 +145,52 @@ func (tea *TwitterEngagementAPI) Historical(tweetIds []string, from, to time.Tim
 	if nil != err {
 		return nil, err
 	}
+	if http.StatusOK != response.StatusCode {
+		errors := &EngAPIError{}
+		err = json.NewDecoder(reader).Decode(errors)
+		if nil != err {
+			return result, err
+		}
+		return nil, errors
+	}
+	tmpSuccess := SuccessRaw{}
+	err = json.NewDecoder(reader).Decode(&tmpSuccess)
+	if nil != err {
+		return result, err
+	}
+	result.populate(tmpSuccess)
+	return result, nil
+}
+
+// HistoricalPerDay return pointer for struct SuccessPerDay
+func (tea *TwitterEngagementAPI) HistoricalPerDay(tweetIds []string, from, to time.Time) (*SuccessPerDay, error) {
+	if maxHistoricalTweets < len(tweetIds) {
+		return nil, ErrExceedsMaxHistoricalTweets
+	}
+	historical := &historical{}
+	historical.TweetIds = tweetIds
+	historical.Start = from.Format("2006-01-02")
+	historical.End = to.Format("2006-01-02")
+	historical.EngagementTypes = defaultHistoricalEngagementTypes
+	historical.Groupings = defaultHistoricalPerDayGroupings
+	result := newSuccessPerDay()
+	response, err := tea.do(historicalURL, historical)
+	if nil != err {
+		return result, err
+	}
+	defer func() {
+		if nil != response {
+			response.Body.Close()
+		}
+	}()
+	result.meta(response)
+	reader, err := gzip.NewReader(response.Body)
+	if nil != err {
+		return nil, err
+	}
+	b, _ := ioutil.ReadAll(reader)
+	fmt.Println(string(b))
+	os.Exit(1)
 	if http.StatusOK != response.StatusCode {
 		errors := &EngAPIError{}
 		err = json.NewDecoder(reader).Decode(errors)
