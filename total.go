@@ -16,9 +16,16 @@ var (
 	ErrHTTPBadCode = errors.New("HTTP bad code")
 )
 
-var defaultTotalEngagementTypes = []EngagementType{
+var defaultTotalEngagementWithImpTypes = []EngagementType{
 	ImpressionType,
 	EngType,
+	FavoriteType,
+	RetweetType,
+	ReplyType,
+	VideoViewType,
+}
+
+var defaultTotalEngagementTypes = []EngagementType{
 	FavoriteType,
 	RetweetType,
 	ReplyType,
@@ -100,7 +107,7 @@ func (tea *TwitterEngagementAPI) TotalRaw(tweetIds []string, types []EngagementT
 }
 
 // Total return pointer for struct Success
-func (tea *TwitterEngagementAPI) Total(tweetIds []string) (*Success, error) {
+func (tea *TwitterEngagementAPI) Total(tweetIds []string, impressions bool) (*Success, error) {
 	if maxTotalTweets < len(tweetIds) {
 		return nil, ErrExceedsMaxTweets
 	}
@@ -109,7 +116,11 @@ func (tea *TwitterEngagementAPI) Total(tweetIds []string) (*Success, error) {
 	if tea.appOnly {
 		total.EngagementTypes = defaultAppOnlyTotalEngagementTypes
 	} else {
-		total.EngagementTypes = defaultTotalEngagementTypes
+		if impressions {
+			total.EngagementTypes = defaultTotalEngagementWithImpTypes
+		} else {
+			total.EngagementTypes = defaultTotalEngagementTypes
+		}
 	}
 	total.Groupings = defaultTotalGroupings
 	result := newSuccess()
