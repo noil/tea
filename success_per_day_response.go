@@ -196,8 +196,8 @@ func (result *SuccessPerDay) populate(data SuccessRaw) {
 							tweet.Days[day] = dayType
 						}
 					}
-					result.Tweets = append(result.Tweets, tweet)
 				}
+				result.Tweets = append(result.Tweets, tweet)
 			}
 		case unsupportedTweetIds:
 		case unavailableTweetIds:
