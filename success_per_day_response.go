@@ -64,7 +64,9 @@ func (result *SuccessPerDay) populate(data SuccessRaw) {
 						continue
 					}
 					for day, ivalue := range days {
-						tweet.Days[day] = Types{}
+						if _, ok := tweet.Days[day]; !ok {
+							tweet.Days[day] = Types{}
+						}
 						value, ok := ivalue.(string)
 						if !ok {
 							continue
